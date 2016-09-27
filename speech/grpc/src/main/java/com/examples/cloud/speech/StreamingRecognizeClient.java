@@ -57,9 +57,6 @@ import javax.sound.sampled.*;
  */
 public class StreamingRecognizeClient {
 
-  private final String file;
-  private final int samplingRate;
-
   private static final Logger logger = Logger.getLogger(StreamingRecognizeClient.class.getName());
 
   private final ManagedChannel channel;
@@ -77,10 +74,8 @@ public class StreamingRecognizeClient {
   /**
    * Construct client connecting to Cloud Speech server at {@code host:port}.
    */
-  public StreamingRecognizeClient(ManagedChannel channel, String file, int samplingRate)
+  public StreamingRecognizeClient(ManagedChannel channel)
       throws IOException {
-    this.file = file;
-    this.samplingRate = samplingRate;
     this.channel = channel;
 
     speechClient = SpeechGrpc.newStub(channel);
@@ -150,7 +145,7 @@ public class StreamingRecognizeClient {
       RecognitionConfig config =
           RecognitionConfig.newBuilder()
               .setEncoding(AudioEncoding.LINEAR16)
-              .setSampleRate(samplingRate)
+              .setSampleRate(16000)
               .build();
       StreamingRecognitionConfig streamingConfig =
           StreamingRecognitionConfig.newBuilder()
@@ -187,7 +182,7 @@ public class StreamingRecognizeClient {
         requestObserver.onNext(request);
 			}     
 
-      logger.info("Sent " + totalBytes + " bytes from audio file: " + file);
+      logger.info("Sent " + totalBytes + " bytes from the mic");
     } catch (RuntimeException e) {
       // Cancel RPC.
       requestObserver.onError(e);
@@ -202,79 +197,11 @@ public class StreamingRecognizeClient {
 
   public static void main(String[] args) throws Exception {
 
-    String audioFile = "";
     String host = "speech.googleapis.com";
     Integer port = 443;
-    Integer sampling = 16000;
-
-    CommandLineParser parser = new DefaultParser();
-
-    Options options = new Options();
-    options.addOption(
-        Option.builder()
-            .longOpt("file")
-            .desc("path to audio file")
-            .hasArg()
-            .argName("FILE_PATH")
-            .build());
-    options.addOption(
-        Option.builder()
-            .longOpt("host")
-            .desc("endpoint for api, e.g. speech.googleapis.com")
-            .hasArg()
-            .argName("ENDPOINT")
-            .build());
-    options.addOption(
-        Option.builder()
-            .longOpt("port")
-            .desc("SSL port, usually 443")
-            .hasArg()
-            .argName("PORT")
-            .build());
-    options.addOption(
-        Option.builder()
-            .longOpt("sampling")
-            .desc("Sampling Rate, i.e. 16000")
-            .hasArg()
-            .argName("RATE")
-            .build());
-
-    try {
-      CommandLine line = parser.parse(options, args);
-      if (line.hasOption("file")) {
-        audioFile = line.getOptionValue("file");
-      } else {
-        System.err.println("An Audio file must be specified (e.g. /foo/baz.raw).");
-        System.exit(1);
-      }
-
-      if (line.hasOption("host")) {
-        host = line.getOptionValue("host");
-      } else {
-        System.err.println("An API enpoint must be specified (typically speech.googleapis.com).");
-        System.exit(1);
-      }
-
-      if (line.hasOption("port")) {
-        port = Integer.parseInt(line.getOptionValue("port"));
-      } else {
-        System.err.println("An SSL port must be specified (typically 443).");
-        System.exit(1);
-      }
-
-      if (line.hasOption("sampling")) {
-        sampling = Integer.parseInt(line.getOptionValue("sampling"));
-      } else {
-        System.err.println("An Audio sampling rate must be specified.");
-        System.exit(1);
-      }
-    } catch (ParseException exp) {
-      System.err.println("Unexpected exception:" + exp.getMessage());
-      System.exit(1);
-    }
 
     ManagedChannel channel = AsyncRecognizeClient.createChannel(host, port);
-    StreamingRecognizeClient client = new StreamingRecognizeClient(channel, audioFile, sampling);
+    StreamingRecognizeClient client = new StreamingRecognizeClient(channel);
     try {
       client.recognize();
     } finally {
