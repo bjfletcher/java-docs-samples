@@ -20,6 +20,7 @@ import static org.apache.log4j.ConsoleAppender.SYSTEM_OUT;
 
 import com.google.cloud.speech.v1beta1.RecognitionConfig;
 import com.google.cloud.speech.v1beta1.RecognitionConfig.AudioEncoding;
+import com.google.cloud.speech.v1beta1.SpeechContext;
 import com.google.cloud.speech.v1beta1.SpeechGrpc;
 import com.google.cloud.speech.v1beta1.StreamingRecognitionConfig;
 import com.google.cloud.speech.v1beta1.StreamingRecognizeRequest;
@@ -65,6 +66,8 @@ public class StreamingRecognizeClient {
 
 	private final TargetDataLine line;
 
+  private static final int SAMPLE_RATE = 44100;
+
   private static final int BYTES_PER_BUFFER = 3200; //buffer size in bytes
   private static final int BYTES_PER_SAMPLE = 2; //bytes per sample for LINEAR16
 
@@ -92,7 +95,7 @@ public class StreamingRecognizeClient {
 
 	private TargetDataLine getSoundLine() throws IOException {
 		TargetDataLine line;
-		AudioFormat format = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, 16000, 16, 1, 2, 16000, false);
+		AudioFormat format = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, SAMPLE_RATE, 16, 1, 2, SAMPLE_RATE, false);
 		DataLine.Info info = new DataLine.Info(TargetDataLine.class, 
 				format); // format is an AudioFormat object
 		if (!AudioSystem.isLineSupported(info)) {
@@ -142,16 +145,24 @@ public class StreamingRecognizeClient {
     try {
       // Build and send a StreamingRecognizeRequest containing the parameters for
       // processing the audio.
+			SpeechContext context = SpeechContext.newBuilder()
+        .addPhrases("Dale")
+				.addPhrases("Dale Lane")
+				.addPhrases("IBM")
+				.addPhrases("Watson")
+        .build();
       RecognitionConfig config =
           RecognitionConfig.newBuilder()
               .setEncoding(AudioEncoding.LINEAR16)
-              .setSampleRate(16000)
+              .setSampleRate(SAMPLE_RATE)
+							.setLanguageCode("en-GB")
+							.setSpeechContext(context)
               .build();
       StreamingRecognitionConfig streamingConfig =
           StreamingRecognitionConfig.newBuilder()
               .setConfig(config)
               .setInterimResults(true)
-              .setSingleUtterance(true)
+              .setSingleUtterance(false)
               .build();
 
       StreamingRecognizeRequest initial =
@@ -162,7 +173,7 @@ public class StreamingRecognizeClient {
 			// been obtained and opened.
 			int numBytesRead;
 			int totalBytes = 0;
-			byte[] data = new byte[line.getBufferSize() / 5];
+			byte[] data = new byte[BYTES_PER_BUFFER];
 
 			// Begin audio capture.
 			this.line.start();
