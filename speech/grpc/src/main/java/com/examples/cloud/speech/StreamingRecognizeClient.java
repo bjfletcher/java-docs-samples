@@ -49,6 +49,8 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import javax.sound.sampled.*;
+
 
 /**
  * Client that sends streaming audio to Speech.Recognize and returns streaming transcript.
@@ -63,6 +65,8 @@ public class StreamingRecognizeClient {
   private final ManagedChannel channel;
 
   private final SpeechGrpc.SpeechStub speechClient;
+
+	private final TargetDataLine line;
 
   private static final int BYTES_PER_BUFFER = 3200; //buffer size in bytes
   private static final int BYTES_PER_SAMPLE = 2; //bytes per sample for LINEAR16
@@ -87,7 +91,29 @@ public class StreamingRecognizeClient {
     
     ConsoleAppender appender = new ConsoleAppender(new SimpleLayout(), SYSTEM_OUT);
     logger.addAppender(appender);
+
+		this.line = this.getSoundLine();
   }
+
+	private TargetDataLine getSoundLine() throws IOException {
+		TargetDataLine line;
+		AudioFormat format = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, 16000, 16, 1, 2, 16000, false);
+		DataLine.Info info = new DataLine.Info(TargetDataLine.class, 
+				format); // format is an AudioFormat object
+		if (!AudioSystem.isLineSupported(info)) {
+			// Handle the error ... 
+			throw new IOException("Audio not supported");
+		}
+		// Obtain and open the line.
+		try {
+			line = (TargetDataLine) AudioSystem.getLine(info);
+			line.open(format);
+		} catch (LineUnavailableException ex) {
+			// Handle the error ... 
+			throw new IOException(ex);
+		}
+		return line;
+	}
 
   public void shutdown() throws InterruptedException {
     channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
@@ -137,25 +163,30 @@ public class StreamingRecognizeClient {
           StreamingRecognizeRequest.newBuilder().setStreamingConfig(streamingConfig).build();
       requestObserver.onNext(initial);
 
-      // Open audio file. Read and send sequential buffers of audio as additional RecognizeRequests.
-      FileInputStream in = new FileInputStream(new File(file));
-      // For LINEAR16 at 16000 Hz sample rate, 3200 bytes corresponds to 100 milliseconds of audio.
-      byte[] buffer = new byte[BYTES_PER_BUFFER];
-      int bytesRead;
-      int totalBytes = 0;
-      int samplesPerBuffer = BYTES_PER_BUFFER / BYTES_PER_SAMPLE;
-      int samplesPerMillis = samplingRate / 1000;
+			// Assume that the TargetDataLine, line, has already
+			// been obtained and opened.
+			int numBytesRead;
+			int totalBytes = 0;
+			byte[] data = new byte[line.getBufferSize() / 5];
 
-      while ((bytesRead = in.read(buffer)) != -1) {
-        totalBytes += bytesRead;
+			// Begin audio capture.
+			this.line.start();
+
+			// Here, stopped is a global boolean set by another thread.
+			// FIXME: the above is ignored
+			boolean stopped = false;
+			while (!stopped) {
+				// Read the next chunk of data from the TargetDataLine.
+				numBytesRead = this.line.read(data, 0, data.length);
+				totalBytes += numBytesRead;
+
         StreamingRecognizeRequest request =
             StreamingRecognizeRequest.newBuilder()
-                .setAudioContent(ByteString.copyFrom(buffer, 0, bytesRead))
+                .setAudioContent(ByteString.copyFrom(data, 0, numBytesRead))
                 .build();
         requestObserver.onNext(request);
-        // To simulate real-time audio, sleep after sending each audio buffer.
-        Thread.sleep(samplesPerBuffer / samplesPerMillis);
-      }
+			}     
+
       logger.info("Sent " + totalBytes + " bytes from audio file: " + file);
     } catch (RuntimeException e) {
       // Cancel RPC.
