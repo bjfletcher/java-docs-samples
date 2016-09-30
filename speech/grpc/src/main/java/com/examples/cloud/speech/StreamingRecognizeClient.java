@@ -66,9 +66,9 @@ public class StreamingRecognizeClient {
 
 	private final TargetDataLine line;
 
-  private static final int SAMPLE_RATE = 44100;
+  private static final int SAMPLE_RATE = 48000;
 
-  private static final int BYTES_PER_BUFFER = 3200; //buffer size in bytes
+  private static final int BYTES_PER_BUFFER = 12800; //buffer size in bytes
   private static final int BYTES_PER_SAMPLE = 2; //bytes per sample for LINEAR16
 
   private static final List<String> OAUTH2_SCOPES =
@@ -161,8 +161,8 @@ public class StreamingRecognizeClient {
       StreamingRecognitionConfig streamingConfig =
           StreamingRecognitionConfig.newBuilder()
               .setConfig(config)
-              .setInterimResults(true)
               .setSingleUtterance(false)
+              .setInterimResults(true)
               .build();
 
       StreamingRecognizeRequest initial =
@@ -185,7 +185,6 @@ public class StreamingRecognizeClient {
 				// Read the next chunk of data from the TargetDataLine.
 				numBytesRead = this.line.read(data, 0, data.length);
 				totalBytes += numBytesRead;
-
         StreamingRecognizeRequest request =
             StreamingRecognizeRequest.newBuilder()
                 .setAudioContent(ByteString.copyFrom(data, 0, numBytesRead))
